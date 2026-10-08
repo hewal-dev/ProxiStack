@@ -1,0 +1,3 @@
+Key,File,Type,UsedInMainMenu,NoTranslate,KeepLoaded,english,Context / Alternate Text,german,spanish,french,italian,japanese,koreana,polish,brazilian,russian,turkish,schinese,tchinese
+lblStashStack,xui,XUI,,,x,Stash,,Einlagern,,,,,,,,,,,
+lblStashRestock,xui,XUI,,,x,Restock,,Auffüllen,,,,,,,,,,,

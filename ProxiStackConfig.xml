@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xml>
+	<!-- ProxiStack Configuration -->
+
+	<!-- === PROXISTACK CRAFTING === -->
+
+	<!-- 3D distance from player to scan for containers during crafting (Format: X Y Z) -->
+	<CraftingDistance>25 25 25</CraftingDistance>
+
+	<!-- Allow crafting using resources from nearby containers -->
+	<EnableForCrafting>true</EnableForCrafting>
+
+	<!-- Allow block repairing using resources from nearby containers -->
+	<EnableForRepair>true</EnableForRepair>
+
+	<!-- Allow block upgrading using resources from nearby containers -->
+	<EnableForUpgrade>false</EnableForUpgrade>
+
+	<!-- Allow block painting using paint from nearby containers -->
+	<EnableForPainting>true</EnableForPainting>
+
+	<!-- Allow weapon/tool reloading from nearby containers -->
+	<EnableForReload>true</EnableForReload>
+
+	<!-- Reserved setting: trading from nearby containers is not currently supported -->
+	<EnableForTrader>true</EnableForTrader>
+
+	<!-- Allow nearby container items to count toward supported tracked-item challenges -->
+	<EnableForQuests>true</EnableForQuests>
+
+	<!-- Reserved setting: lockpicking from nearby containers is not currently supported -->
+	<EnableForLockpicking>true</EnableForLockpicking>
+
+	<!-- Scan and pull crafting resources from vehicles -->
+	<PullFromVehicles>true</PullFromVehicles>
+
+	<!-- Scan and pull crafting resources from active drones -->
+	<PullFromDrones>true</PullFromDrones>
+
+	<!-- Scan and pull crafting resources from dew collectors -->
+	<PullFromDewCollectors>true</PullFromDewCollectors>
+
+	<!-- Scan and pull crafting resources from workstation output slots (output only; the input/smelting slot is never used) -->
+	<PullFromWorkstationOutputs>true</PullFromWorkstationOutputs>
+
+	<!-- Allow pulling resources from password-protected or locked containers you have access to -->
+	<AllowLockedContainers>true</AllowLockedContainers>
+
+	<!-- === STORAGE PRIORITY === -->
+	<!-- Prioritätsreihenfolge für die Materialsuche und den Verbrauch (durch Komma getrennt). -->
+	<!-- Von links nach rechts: Der erste gefundene Typ wird zuerst verbraucht. -->
+	<!-- Mögliche Werte: Drone, DewCollector, Workstation, Container, Vehicle -->
+	<StoragePriority>Drone, DewCollector, Workstation, Container, Vehicle</StoragePriority>
+
+	<!-- === PROXISTACK STASHING === -->
+
+	<!-- Enable the Stash feature (stashing matching items to nearby chests) -->
+	<EnableForStash>true</EnableForStash>
+
+	<!-- Enable the Restock feature (refilling ammo/food from nearby chests) -->
+	<EnableForRestock>true</EnableForRestock>
+
+	<!-- Enable slot locking in player backpack to prevent stashing locked slots -->
+	<EnableForLock>true</EnableForLock>
+
+	<!-- 3D distance from player to stash items (Format: X Y Z) -->
+	<StashDistance>15 15 15</StashDistance>
+
+	<!-- Show the padlock icon indicating lock mode state in the inventory header -->
+	<LockModeIconVisible>true</LockModeIconVisible>
+
+	<!-- Locked slots padlock overlay icon color (Format: Red Green Blue Alpha) -->
+	<LockedSlotsIconColor>255 0 0 255</LockedSlotsIconColor>
+
+	<!-- Locked slots border highlight color (Format: Red Green Blue Alpha) -->
+	<LockedSlotsBorderColor>128 0 0 0</LockedSlotsBorderColor>
+
+	<!-- === HOTKEYS === -->
+	<!-- Hotkey combinations (stored as space-separated Unity KeyCode numbers) -->
+	<!-- KeyCode references: 308=LeftAlt, 120=X, 122=Z, 304=LeftShift, 306=LeftCtrl -->
+	<StashHotkeys>308 120</StashHotkeys>
+	<RestockHotkeys>308 122</RestockHotkeys>
+	<LockHotkeys>308</LockHotkeys>
+
+	<!-- === MULTIPLAYER === -->
+
+	<!-- Lock slots immediately on client click without waiting for server response -->
+	<MultiplayerImmediateLock>true</MultiplayerImmediateLock>
+
+	<!-- Handshake timeout duration in seconds for server connection handshake -->
+	<MultiplayerHandshakeTimeoutSeconds>10</MultiplayerHandshakeTimeoutSeconds>
+</xml>
