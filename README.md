@@ -35,7 +35,7 @@ ore stay where you put them.
 
 ## Installation
 
-1. Download the latest release ZIP from the Releases page (or build from source, below).
+1. Download the latest release ZIP from the [Releases page](https://github.com/hewal-dev/ProxiStack/releases) (or build from source, below).
 2. Extract the `ProxiStack` folder into your mods directory:
    ```
    .../7 Days To Die/Mods/ProxiStack/
