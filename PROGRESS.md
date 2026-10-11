@@ -101,6 +101,28 @@ syncTEfromUI (UI -> TE): UI-Ausgabe=[leer] TE-Ausgabe=[leer]     <-- vorher stan
 - **Offen:** Upload auf Nexus/GitHub; die Nexus-Beschreibung muss dort noch auf den neuen Stand
   („keine Harmony im Paket") gebracht werden — die Textdateien im Repo sind bereits korrigiert.
 
+## Build-Skripte korrigiert – 11.10.2026
+
+Beim Anlegen des Compare-Repos fiel auf, dass das **veröffentlichte** `build.sh` (Stand 1.1.6)
+nach der Harmony-Bereinigung nicht mehr funktionierte: es verlangte eine `0Harmony.dll` **im
+Projektordner** (`$MOD_ROOT/0Harmony.dll`) — die per `.gitignore` bewusst nicht im Repo liegt —
+und meldete fälschlich „Sie ist in der offiziellen Mod-Auslieferung enthalten". Fremde Builds
+wären also schon an der Voraussetzungsprüfung gescheitert.
+
+- `build.sh`: Harmony-Referenz jetzt aus der **Spielinstallation**
+  (`<Spiel>/Mods/0_TFP_Harmony/0Harmony.dll`, per `HARMONY=` überschreibbar, mit Suche im
+  Spielverzeichnis als Fallback) und klare Fehlermeldung; Meldung zur Auslieferung entfernt.
+- `ProxiStack.csproj`: `HintPath` von `0Harmony.dll` → `$(GameDir)/Mods/0_TFP_Harmony/0Harmony.dll`
+  (Windows/MSBuild-Builds hätten sonst dieselbe fehlende Referenz gehabt).
+- **Nachweis:** Arbeitsbaum in eine Scratch-Kopie ohne `0Harmony.dll` gestellt → `BUILD
+  SUCCESSFUL`. Die erzeugte DLL ist **nicht** byte-identisch mit dem Release-Build
+  (`302d83b330498ab563b019bb8d74ca2fa4cc2acaaa9991d2e78655cd334bc140` statt `8a7dd586…`), weil
+  jetzt gegen Harmony **2.13** (Spiel) statt gegen die lokale Kopie **2.4.2** kompiliert wird.
+  Laufzeitverhalten unverändert: Mono bindet beim Laden auf die Spiel-Harmony (gleicher Simple
+  Name); das Release-Paket 1.1.7 und der Livetest bleiben daher unangetastet.
+- **Offen (optional):** 1.1.7 bei Gelegenheit gegen Harmony 2.13 neu bauen und neu ausliefern —
+  rein kosmetisch bezüglich der Assembly-Referenz, erfordert aber neuen ZIP-Asset + Hash-Abgleich.
+
 ## GitHub-Veröffentlichung 1.1.7 – 11.10.2026
 
 - **Repo:** `https://github.com/hewal-dev/ProxiStack` (public, MIT), Branch `main`.

@@ -12,7 +12,6 @@ set -u
 
 MOD_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT_DLL="$MOD_ROOT/ProxiStack.dll"
-HARMONY="$MOD_ROOT/0Harmony.dll"
 
 # ---------------------------------------------------------------------------
 # 1) Spielverzeichnis bestimmen
@@ -46,6 +45,9 @@ if [ -z "$GAME_DIR" ] || [ ! -d "$GAME_DIR/7DaysToDie_Data/Managed" ]; then
 fi
 
 MANAGED="$GAME_DIR/7DaysToDie_Data/Managed"
+# Harmony NUR als Compile-Referenz aus der Spielinstallation (nie aus dem Mod-Ordner):
+# 7 Days to Die liefert <Mods>/0_TFP_Harmony/0Harmony.dll (Harmony 2.13) selbst mit.
+HARMONY="${HARMONY:-$GAME_DIR/Mods/0_TFP_Harmony/0Harmony.dll}"
 
 echo "=== ProxiStack Build ==="
 echo "Spielverzeichnis: $GAME_DIR"
@@ -62,9 +64,16 @@ if ! command -v mcs >/dev/null 2>&1; then
 fi
 
 if [ ! -f "$HARMONY" ]; then
-    echo "FEHLER: 0Harmony.dll fehlt in $MOD_ROOT." >&2
-    echo "Sie ist in der offiziellen Mod-Auslieferung enthalten (0Harmony 2.4.2, siehe README)." >&2
-    exit 1
+    FOUND="$(find "$GAME_DIR" -name '0Harmony.dll' 2>/dev/null | head -1)"
+    if [ -n "$FOUND" ]; then
+        HARMONY="$FOUND"
+    else
+        echo "FEHLER: 0Harmony.dll nicht gefunden." >&2
+        echo "Erwartet: $GAME_DIR/Mods/0_TFP_Harmony/0Harmony.dll" >&2
+        echo "Sie gehört zur Spielinstallation und darf NICHT in den Mod-Ordner kopiert werden." >&2
+        echo "Alternativ per HARMONY=/pfad/0Harmony.dll übergeben." >&2
+        exit 1
+    fi
 fi
 
 MISSING=0

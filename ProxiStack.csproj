@@ -60,10 +60,13 @@
     </Reference>
   </ItemGroup>
 
-  <!-- Harmony 2.x – liegt neben dem Projekt (siehe README / Release-ZIP) -->
+  <!-- Harmony 2.x – NUR als Compile-Referenz aus der Spielinstallation.
+       7 Days to Die liefert <Game>/Mods/0_TFP_Harmony/0Harmony.dll selbst mit;
+       eine Harmony-DLL im Mod-Ordner erzeugt auf manchen Setups Startfehler.
+       Nie mitliefern (siehe README). -->
   <ItemGroup>
     <Reference Include="0Harmony">
-      <HintPath>0Harmony.dll</HintPath>
+      <HintPath>$(GameDir)/Mods/0_TFP_Harmony/0Harmony.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
