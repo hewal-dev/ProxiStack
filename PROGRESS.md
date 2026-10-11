@@ -114,6 +114,16 @@ syncTEfromUI (UI -> TE): UI-Ausgabe=[leer] TE-Ausgabe=[leer]     <-- vorher stan
   und der Projektordner ist kein Git-Repository. Ein Upload der 1.0.5 dorthin würde ein neues
   öffentliches Repo bedeuten — dafür ist eine ausdrückliche Freigabe nötig.
 
+**Gegengeprüft (nicht nur gepusht):**
+
+- Commit auf `main`: `0c54120` (10 Dateien geändert, +565/−15) — Remote-HEAD per
+  `gh api repos/…/commits/main` identisch, `git status -sb` sauber.
+- Remote-Tree gelesen: 23 Dateien, keine `*.dll`/`*.zip`/`dist/`/`releases/`/`media/`.
+- Release `v1.1.7` (Latest, Ziel `main`): https://github.com/hewal-dev/ProxiStack/releases/tag/v1.1.7
+  — Asset `ProxiStack-Proximity-Crafting-and-Stashing-1.1.7.zip`, **36.201 Bytes**, Status
+  `uploaded`, identisch mit der lokalen Datei.
+- Repo-Status: public, Lizenz MIT, `pushed_at` 2026-10-11T09:19:40Z.
+
 ## Verbindliche Pfade (Stand 11.10.2026)
 
 - Livetest-Ziel **aller** v3-Mods: `/home/hewal/7 Days/0 einzelne mods/<ModName>/`.
