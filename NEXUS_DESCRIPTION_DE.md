@@ -59,7 +59,7 @@ Erwarteter Pfad:
 
 - 7 Days to Die v3.0;
 - EAC muss deaktiviert sein;
-- keine separat herunterzuladende Abhängigkeit – die benötigte Harmony-Bibliothek ist im Paket enthalten;
+- keine separat herunterzuladende Abhängigkeit – die Mod ist gegen die Harmony-Bibliothek kompiliert, die 7 Days to Die selbst mitliefert (`Mods/0_TFP_Harmony`). Im Paket ist bewusst **keine** Harmony-DLL enthalten: eine zweite Kopie im Mod-Ordner kann beim Start Fehler verursachen. Falls du eine ältere Version (≤ 1.1.6) installiert hast, lösche `Mods/ProxiStack/0Harmony.dll`;
 - die Mod funktioniert im Mehrspielerbetrieb mit gehosteten Spielen und dedizierten Servern, wurde dort aber noch nicht ausgiebig getestet. Sie muss auf dem Host beziehungsweise Server und auf allen teilnehmenden Clients installiert sein.
 
 ## Kompatibilität
@@ -100,7 +100,7 @@ Entwicklung: **Eltern vs Zombies**
 
 YouTube: https://www.youtube.com/@ElternVSZombies
 
-Enthaltene Bibliothek: Harmony / HarmonyX-kompatible Harmony-Bibliothek (`0Harmony.dll`).
+Enthaltene Bibliothek: keine – 7 Days to Die liefert Harmony selbst mit (`Mods/0_TFP_Harmony`). Eine zusätzliche `0Harmony.dll` im Mod-Ordner (Versionen ≤ 1.1.6) bitte entfernen.
 
 ## Berechtigungen
 

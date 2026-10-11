@@ -427,6 +427,100 @@ namespace ProxiStack
         }
 
         /// <summary>
+        /// Zieht die offene Arbeitsstation-Ansicht auf den TE-Stand nach (TE -> UI).
+        ///
+        /// Hintergrund (belegt an Assembly-CSharp v3.3.0):
+        /// `XUiC_WorkstationWindowGroup` hält die Slots ihrer Grids als eigene
+        /// UI-Kopie und schreibt sie in `syncTEfromUI()` per
+        /// `XUiM_Workstation.SetOutputStacks(outputWindow.GetSlots())` zurück ins
+        /// TileEntity. Das passiert u. a. sofort, wenn ein Craft-Vorgang startet
+        /// (`Update()`: `wasCrafting != craftingQueue.IsCrafting()`) und beim
+        /// Schließen des Fensters. Verringert ProxiStack das Ausgabefach direkt am
+        /// TE, würden die unveränderten UI-Slots den alten Stand zurückschreiben —
+        /// die Items wären "nicht verbraucht".
+        /// Vanilla besitzt für diesen Fall `XUiC_WorkstationWindowGroup
+        /// .TileEntity_OutputChanged()` (genau `outputWindow.SetSlots(...)`,
+        /// verdrahtet es aber nirgends). Hier wird derselbe Schritt ausgeführt,
+        /// sofern das Fenster dieser Station gerade offen ist.
+        /// </summary>
+        public static void RefreshOpenWorkstationOutputGrid(TileEntityWorkstation workstation)
+        {
+            try
+            {
+                if (workstation == null) return;
+
+                // 1) Beste Quelle: das Stationsfenster des laufenden Craft-Klicks
+                //    (siehe Patches.Patch_ItemActionEntryCraft_OnActivated). Nur während des
+                //    Klick-Vorgangs gesetzt und im Livetest nachweislich auflösbar.
+                XUiC_WorkstationWindowGroup activeWindow = Patches.ActiveStationWindow;
+                if (activeWindow != null && activeWindow.WorkstationData != null
+                    && activeWindow.WorkstationData.TileEntity == workstation)
+                {
+                    RefreshWorkstationOutputGrid(activeWindow);
+                    return;
+                }
+
+                LocalPlayerUI playerUI = LocalPlayerUI.primaryUI;
+                if (playerUI == null) return;
+
+                XUi xui = playerUI.xui;
+                if (xui == null) return;
+
+                // 2) Suche über die Window-Groups (Vanilla-Muster aus ItemActionEntryCraft.OnActivated).
+                List<XUiC_CraftingWindowGroup> groups = xui.GetChildrenByType<XUiC_CraftingWindowGroup>();
+                if (groups != null)
+                {
+                    for (int i = 0; i < groups.Count; i++)
+                    {
+                        XUiC_WorkstationWindowGroup wsGroup = groups[i] as XUiC_WorkstationWindowGroup;
+                        if (wsGroup == null) continue;
+                        if (wsGroup.WindowGroup == null || !wsGroup.WindowGroup.isShowing) continue;
+                        if (wsGroup.WorkstationData == null || wsGroup.WorkstationData.TileEntity != workstation) continue;
+
+                        RefreshWorkstationOutputGrid(wsGroup);
+                        return;
+                    }
+                }
+
+                // 3) Fallback: altes Property (in dieser Spielversion offenbar nicht gesetzt).
+                XUiC_WorkstationOutputGrid outputGrid = xui.CurrentWorkstationOutputGrid;
+                if (outputGrid == null) return;
+
+                XUiM_Workstation data = outputGrid.WorkstationData;
+                if (data == null || data.TileEntity != workstation) return;
+
+                outputGrid.SetSlots(data.GetOutputStacks());
+                outputGrid.IsDirty = true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[ProxiStack] Refresh workstation output grid: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Zieht das Ausgabefach eines konkreten Stationsfensters auf den TE-Stand nach
+        /// (TE -> UI). Genau der Schritt, den Vanilla in syncUIfromTE()/TileEntity_OutputChanged()
+        /// ausführt, hier aber gezielt nach einem eigenen Verbrauch.
+        /// </summary>
+        public static void RefreshWorkstationOutputGrid(XUiC_WorkstationWindowGroup wsGroup)
+        {
+            try
+            {
+                if (wsGroup == null || wsGroup.WorkstationData == null) return;
+                if (wsGroup.outputWindow == null) return;
+
+                wsGroup.outputWindow.SetSlots(wsGroup.WorkstationData.GetOutputStacks());
+                wsGroup.outputWindow.IsDirty = true;
+                wsGroup.SetAllChildrenDirty();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[ProxiStack] Refresh workstation output grid (Fenster): {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Ermittelt alle verfügbaren Lagerquellen in Reichweite und sortiert sie nach konfigurierter Priorität.
         /// </summary>
         public static List<StorageSource> GetNearbySources(Vector3i center, Vector3i radius, bool includeLocked)
@@ -601,6 +695,15 @@ namespace ProxiStack
             if (TileEntity != null)
             {
                 TileEntity.SetModified();
+
+                // v1.1.7: Wird das Ausgabefach einer Arbeitsstation direkt am
+                // TileEntity verringert, muss die offene Stationsansicht sofort
+                // mitgezogen werden. Sonst stellt Vanillas syncTEfromUI() den
+                // alten Stand aus den unveränderten UI-Slots wieder her.
+                // Beleg: Assembly-CSharp v3.3.0, XUiC_WorkstationWindowGroup.
+                if (TileEntity is TileEntityWorkstation workstation)
+                    ContainerHelper.RefreshOpenWorkstationOutputGrid(workstation);
+
                 return;
             }
 

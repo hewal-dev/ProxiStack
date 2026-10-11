@@ -12,6 +12,15 @@ namespace ProxiStack
 {
     internal static class Patches
     {
+        /// <summary>
+        /// Offenes Stationsfenster des aktuellen Craft-Klicks. Wird im Prefix von
+        /// <c>Patch_ItemActionEntryCraft_OnActivated</c> gesetzt (dort ist es nachweislich
+        /// auflösbar) und im Postfix wieder geleert. Der Weg über die XUi ist unzuverlässig:
+        /// im Livetest war `XUi.CurrentWorkstationOutputGrid` auch bei offenem Fenster null und
+        /// `xui.GetChildrenByType&lt;XUiC_CraftingWindowGroup&gt;()` lieferte kein Stationsfenster.
+        /// </summary>
+        internal static XUiC_WorkstationWindowGroup ActiveStationWindow;
+
         public static class ActionState
         {
             public static bool IsRepairActive = false;
@@ -453,6 +462,64 @@ namespace ProxiStack
         }
 
         // ═══════════════════════════════════════════════════════════════
+        // PATCH 6b: Verbrauch im Arbeitsstation-Fenster
+        // ═══════════════════════════════════════════════════════════════
+        // Beleg (Assembly-CSharp v3.3.0): ItemActionEntryCraft.OnActivated verbraucht
+        // die Rezeptzutaten im Arbeitsstation-Fenster AUSSCHLIESSLICH über
+        // XUiC_WorkstationInputGrid.RemoveItems(...) -> DecItem(...) (nur Eingabe-/
+        // Materialfach). Ein Fehlbetrag wird dort stillschweigend ignoriert, und
+        // XUiM_PlayerInventory.RemoveItems (Rucksack/Gürtel) wird in diesem Fenster
+        // gar nicht aufgerufen. Ohne diesen Patch zählt ProxiStack die Zutaten
+        // (Kisten, Fahrzeuge, Drohnen, Ausgabefach der Station) als vorhanden,
+        // verbraucht sie aber nie — Craften wäre kostenlos.
+        // XUiC_WorkstationMaterialInputGrid (Schmiede) erbt diese Methode und wird
+        // damit mit abgedeckt.
+        [HarmonyPatch(typeof(XUiC_WorkstationInputGrid), "DecItem", new Type[] { typeof(ItemValue), typeof(int), typeof(IList<ItemStack>) })]
+        private class Patch_WorkstationInputGrid_DecItem
+        {
+            public static void Postfix(ItemValue _itemValue, int _count, IList<ItemStack> _removedItems, ref int __result)
+            {
+                try
+                {
+                    var config = ProxiStackMod.Instance?.Config;
+                    if (config == null || !config.EnableForCrafting)
+                        return;
+
+                    // Upgrade/Repair laufen über Bag/Inventory, nicht über die Grids.
+                    if (ActionState.IsUpgradeActive || ActionState.IsRepairActive)
+                        return;
+
+                    if (_itemValue == null || _itemValue.IsEmpty() || _count <= 0)
+                        return;
+
+                    if (!IsModSafeForMultiplayer())
+                        return;
+
+                    int remaining = _count - __result;
+                    if (remaining <= 0)
+                        return;
+
+                    EntityPlayerLocal player = GameManager.Instance?.World?.GetPrimaryPlayer();
+                    if (player == null)
+                        return;
+
+                    int removed = ContainerHelper.RemoveNearbyItems(
+                        new Vector3i(player.position), config.CraftingDistance, config.AllowLockedContainers,
+                        _itemValue, remaining, _removedItems);
+
+                    if (removed > 0)
+                    {
+                        __result += removed;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning($"[ProxiStack] WorkstationInputGrid.DecItem patch: {ex.Message}");
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
         // PATCHES FÜR UPGRADE & REPAIR STATE / HINZUFÜGUNG ZUR ANZEIGE
         // ═══════════════════════════════════════════════════════════════
         [HarmonyPatch(typeof(ItemActionRepair), "CanRemoveRequiredResource")]
@@ -805,6 +872,64 @@ namespace ProxiStack
                     Log.Warning($"[ProxiStack] ItemActionEntryCraft.hasItems helper error: {ex.Message}");
                     return playerItems;
                 }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // PATCH 10b: Ausgabefach-Ansicht nach dem Craft-Klick nachziehen
+        // ═══════════════════════════════════════════════════════════════
+        // Vanilla überträgt in XUiC_WorkstationWindowGroup.syncTEfromUI() die UI-Slots der
+        // Station zurück ins TileEntity — u. a. unmittelbar beim Start eines Craft-Vorgangs
+        // (Update: wasCrafting != craftingQueue.IsCrafting()). Verbraucht ProxiStack Zutaten
+        // aus dem Ausgabefach, wird diese TE-Änderung ohne Resync vom alten UI-Stand
+        // überschrieben: Zutaten bleiben sichtbar, Craften ist unendlich oft möglich
+        // (Logbeleg 11.10.2026).
+        // Der Zugriff auf das Fenster erfolgt über den Craft-Klick selbst
+        // (craftCountControl.WindowGroup.Controller) — das ist der einzige im Livetest
+        // verlässlich auflösbare Weg; XUi.CurrentWorkstationOutputGrid war auch bei offenem
+        // Fenster null und GetChildrenByType<XUiC_CraftingWindowGroup>() fand nichts.
+        [HarmonyPatch(typeof(ItemActionEntryCraft), "OnActivated")]
+        private class Patch_ItemActionEntryCraft_OnActivated
+        {
+            public static void Prefix(ItemActionEntryCraft __instance)
+            {
+                try
+                {
+                    ActiveStationWindow = ResolveStationWindow(__instance);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning($"[ProxiStack] OnActivated Prefix (Stationsfenster): {ex.Message}");
+                }
+            }
+
+            public static void Postfix()
+            {
+                try
+                {
+                    // Sicherheitsnetz: falls der Verbrauch über einen Pfad lief, der das
+                    // Ausgabefach nicht selbst nachgezogen hat (z. B. anderes Zutaten-Item).
+                    XUiC_WorkstationWindowGroup wsGroup = ActiveStationWindow;
+                    if (wsGroup != null)
+                        ContainerHelper.RefreshWorkstationOutputGrid(wsGroup);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning($"[ProxiStack] OnActivated Postfix (Ausgabefach-Resync): {ex.Message}");
+                }
+                finally
+                {
+                    ActiveStationWindow = null;
+                }
+            }
+
+            /// <summary>Offenes Stationsfenster des Craft-Klicks oder null (Rucksack-Crafting).</summary>
+            internal static XUiC_WorkstationWindowGroup ResolveStationWindow(ItemActionEntryCraft entry)
+            {
+                if (entry == null) return null;
+                XUiC_RecipeCraftCount counter = entry.craftCountControl;
+                if (counter == null || counter.WindowGroup == null) return null;
+                return counter.WindowGroup.Controller as XUiC_WorkstationWindowGroup;
             }
         }
 

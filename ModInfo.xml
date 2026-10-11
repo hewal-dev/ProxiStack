@@ -4,7 +4,7 @@
 	<DisplayName value="ProxiStack - Proximity Crafting &amp; Stashing"/>
 	<Description value="Craft, reload, refuel, repair, and upgrade using items from nearby containers. Includes proximity-based crafting directly from nearby storage, plus stash items into nearby containers, restock from containers, and lock inventory slots. 25 block radius. Multiplayer ready."/>
 	<Author value="Eltern vs Zombies"/>
-	<Version value="1.1.6"/>
+	<Version value="1.1.7"/>
 	<Website value="https://www.youtube.com/@ElternVSZombies"/>
 	<SkipWithAntiCheat value="true"/>
 </xml>

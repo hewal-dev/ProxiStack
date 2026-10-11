@@ -109,14 +109,81 @@ class WorkstationSourceTests(unittest.TestCase):
             self.assertNotIn("Stacks = workstation.input", text, msg=name)
 
 
+class WorkstationConsumptionTests(unittest.TestCase):
+    def test_workstation_window_craft_consumption_is_patched(self):
+        """Craften im Arbeitsstation-Fenster muss ebenfalls aus Quellen verbrauchen.
+
+        v1.1.7: ItemActionEntryCraft.OnActivated verbraucht Zutaten in einem
+        Arbeitsstation-Fenster nur über XUiC_WorkstationInputGrid.RemoveItems ->
+        DecItem (nur Eingabe-/Materialfach). Ohne eigenen Patch bliebe alles
+        andere (Kisten, Fahrzeuge, Drohnen, Ausgabefach) unverbraucht.
+        """
+        source = PATCHES.read_text(encoding="utf-8")
+        self.assertIn('typeof(XUiC_WorkstationInputGrid), "DecItem"', source)
+        self.assertIn("typeof(IList<ItemStack>)", source)
+        body = method_body(source, "public static void Postfix(ItemValue _itemValue, int _count, IList<ItemStack> _removedItems")
+        self.assertIn("ContainerHelper.RemoveNearbyItems", body)
+        self.assertIn("__result += removed", body)
+
+    def test_open_workstation_output_grid_is_resynced_after_removal(self):
+        """Nach einem Verbrauch aus dem Ausgabefach muss die offene Ansicht nachziehen.
+
+        v1.1.7: XUiC_WorkstationWindowGroup.syncTEfromUI() schreibt die UI-Slots
+        der Grids zurück ins TileEntity (u. a. beim Start eines Craft-Vorgangs).
+        Ohne Resync würde der alte Stand das verringerte Ausgabefach überschreiben.
+        """
+        source = HELPER.read_text(encoding="utf-8")
+        self.assertIn("public static void RefreshOpenWorkstationOutputGrid(TileEntityWorkstation workstation)", source)
+        self.assertIn("CurrentWorkstationOutputGrid", source)
+        self.assertIn("data.GetOutputStacks()", source)
+        set_modified = method_body(source, "public void SetModified()")
+        self.assertIn("TileEntity is TileEntityWorkstation", set_modified)
+        self.assertIn("RefreshOpenWorkstationOutputGrid", set_modified)
+
+    def test_station_window_is_resolved_from_the_craft_click(self):
+        """Das offene Stationsfenster ist nur im Craft-Klick selbst auflösbar.
+
+        Livetest 11.10.2026: `XUi.CurrentWorkstationOutputGrid` war auch bei offenem
+        Lagerfeuer-/Werkbank-Fenster null und `GetChildrenByType<XUiC_CraftingWindowGroup>()`
+        fand kein Stationsfenster. Verlässlich ist nur `craftCountControl.WindowGroup.Controller`.
+        """
+        source = PATCHES.read_text(encoding="utf-8")
+        self.assertIn('[HarmonyPatch(typeof(ItemActionEntryCraft), "OnActivated")]', source)
+        self.assertIn("internal static XUiC_WorkstationWindowGroup ActiveStationWindow", source)
+        # Patch-Klasse am Namen greifen (mehrere Klassen haben ein Postfix() ohne Parameter).
+        start = source.index("private class Patch_ItemActionEntryCraft_OnActivated")
+        patch_class = source[start:start + 2500]
+        self.assertIn("ResolveStationWindow(__instance)", patch_class)
+        self.assertIn("craftCountControl", patch_class)
+        self.assertIn("WindowGroup.Controller as XUiC_WorkstationWindowGroup", patch_class)
+        self.assertIn("RefreshWorkstationOutputGrid", patch_class)
+        self.assertIn("ActiveStationWindow = null", patch_class)
+        # Der Resync selbst muss TE -> UI arbeiten (SetSlots aus GetOutputStacks).
+        refresh = method_body(HELPER.read_text(encoding="utf-8"),
+                              "public static void RefreshWorkstationOutputGrid(XUiC_WorkstationWindowGroup wsGroup)")
+        self.assertIn("outputWindow.SetSlots(", refresh)
+        self.assertIn("GetOutputStacks()", refresh)
+        self.assertIn("IsDirty = true", refresh)
+
+    def test_no_diagnostic_code_in_release(self):
+        """Diagnose-Code (Livetest 11.10.2026) darf nicht im Release-Build landen."""
+        for name in ("Patches.cs", "ContainerHelper.cs", "ProxiStack.cs", "ProxiStackManager.cs",
+                     "ProxiStackConfig.cs", "NetPackageProxiStack.cs"):
+            text = (ROOT / name).read_text(encoding="utf-8")
+            self.assertNotIn("ProxiStackDiag", text, msg=name)
+            self.assertNotIn("[DIAG]", text, msg=name)
+            self.assertNotIn("Diagnose-Build", text, msg=name)
+            self.assertNotIn("DiagPatch", text, msg=name)
+
+
 class VersionTests(unittest.TestCase):
-    def test_bugfix_release_is_1_1_6(self):
+    def test_bugfix_release_is_1_1_7(self):
         root = ET.parse(MODINFO).getroot()
         version_element = root.find("Version")
         if version_element is None:
             self.fail("ModInfo.xml has no Version element")
         version = version_element.attrib["value"]
-        self.assertEqual("1.1.6", version)
+        self.assertEqual("1.1.7", version)
 
     def test_startup_banner_matches_modinfo_version(self):
         """Startmeldung und ModInfo.xml dürfen nicht auseinanderlaufen."""

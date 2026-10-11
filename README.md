@@ -40,8 +40,12 @@ ore stay where you put them.
    ```
    .../7 Days To Die/Mods/ProxiStack/
    ```
-   After extracting you should see `ProxiStack.dll`, `0Harmony.dll`, `ModInfo.xml`,
+   After extracting you should see `ProxiStack.dll`, `ModInfo.xml`,
    `ProxiStackConfig.xml`, `Config/` and `UIAtlases/` in that folder.
+   **Do not add `0Harmony.dll` here:** the game ships Harmony itself in
+   `<Mods>/0_TFP_Harmony/` (Harmony 2.13) and an extra copy inside a mod folder
+   can produce errors at startup. Only an older release ZIP (≤ 1.1.6) contained
+   that file — delete it if you extracted one of those.
 3. **Disable EAC** (Easy Anti-Cheat) for the game — required for any Harmony mod.
 4. Start the game. `[ProxiStack] Initializing ProxiStack vX.Y.Z` appears in the client log.
 
@@ -61,8 +65,10 @@ game — you compile against your own local installation.
 
 - **7 Days to Die v3.x** installed locally (used only as a compile-time reference)
 - **Mono** (`mcs`) on Linux, or **.NET Framework / MSBuild** on Windows
-- `0Harmony.dll` next to the sources — it ships inside the official release ZIP
-  (Harmony 2.x, MIT-licensed; available from the [Harmony project](https://github.com/pardeike/Harmony))
+- `0Harmony.dll` as a **compile-time reference only** (or `Harmony.cs`/the Harmony
+  sources). The game brings its own copy in `<Mods>/0_TFP_Harmony/0Harmony.dll`
+  (Harmony 2.13, MIT-licensed) — reference that file instead of downloading your own,
+  and never copy a Harmony DLL into a mod folder.
 
 ### Linux (Mono)
 
@@ -147,8 +153,9 @@ You may modify this mod and include it in other projects, including overhauls, a
 **Eltern vs Zombies** is credited as the original author.
 
 - **Author:** Eltern vs Zombies — [YouTube](https://www.youtube.com/@ElternvsZombies)
-- **Third-party:** `0Harmony.dll` is part of the [Harmony](https://github.com/pardeike/Harmony)
-  project by Andreas Pardeike (MIT). 7 Days to Die game assemblies are **not** included in this
-  repository and are referenced only at compile time.
+- **Third-party:** the mod is compiled against the [Harmony](https://github.com/pardeike/Harmony)
+  library by Andreas Pardeike (MIT). **No Harmony binary is included in this repository or in
+  the release ZIP** — 7 Days to Die ships its own copy in `<Mods>/0_TFP_Harmony/`. 7 Days to Die
+  game assemblies are **not** included and are referenced only at compile time.
 
 **Not affiliated with The Fun Pimps.** 7 Days to Die is a trademark of The Fun Pimps Entertainment LLC.

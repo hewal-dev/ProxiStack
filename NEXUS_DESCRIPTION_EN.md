@@ -74,7 +74,7 @@ Expected path:
 [list]
 [*]7 Days to Die v3.0.
 [*]EAC must be disabled.
-[*]No separate dependency download is required; the needed Harmony library is included in the package.
+[*]No separate dependency download is required. The mod is compiled against the Harmony library that 7 Days to Die ships itself (`Mods/0_TFP_Harmony`). The package deliberately contains **no** Harmony DLL — a second copy inside a mod folder can cause errors at startup. If you installed an older version (≤ 1.1.6), delete `Mods/ProxiStack/0Harmony.dll`.
 [*]The mod works in multiplayer with hosted games and dedicated servers, but has not yet been extensively tested in multiplayer. Install it on the host or server and on every participating client.
 [/list]
 
@@ -130,7 +130,7 @@ Development: [b]Eltern vs Zombies[/b]
 
 YouTube: [url=https://www.youtube.com/@ElternVSZombies]Eltern vs Zombies[/url]
 
-Included library: Harmony-compatible [code]0Harmony.dll[/code].
+Included library: none — 7 Days to Die provides Harmony itself (`Mods/0_TFP_Harmony`). Please remove any extra `0Harmony.dll` inside the mod folder from versions ≤ 1.1.6.
 
 [line]
 

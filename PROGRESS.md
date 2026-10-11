@@ -15,6 +15,244 @@ ProxiStack implements proximity-based crafting (crafting from nearby chests with
 > **Achtung bei Referenzcodes:** Das Vorbild "ProxiCraft" ist für die Legacy-Version 7DTD v2.6 (A21) geschrieben und wurde vom Autor nicht für v3.0 aktualisiert. Code darf **unter keinen Umständen** 1:1 kopiert werden (Methodennamen wie `GetAmmoCount` statt `GetAmmoCountToReload`, Parameternamen und TileEntity-Strukturen haben sich in v3.0 stark verändert!).
 
 
+> [!NOTE]
+> **Stand 11.10.2026 (abgeschlossen):** In `/home/hewal/7 Days/0 einzelne mods/ProxiStack/` liegt
+> wieder ein **sauberer Release-Build** (keine Diagnose mehr), Version 1.1.7,
+> SHA-256 `8a7dd58600374d4760d61273c4a153dd91127e9c0b6f7e0a4f491c3cb3454a24` (Dev = Livetest).
+> Von Hewal im Spiel bestätigt: Zutaten aus dem Ausgabefach einer offenen Arbeitsstation werden
+> jetzt verbraucht. Offen ist nur noch das Release-ZIP (7 Dateien, ohne Harmony) sowie die
+> Nexus-Textpflege. Die Harmony-Kopien in `ProxiStack/` und `Compare/` wurden am 11.10. aus dem
+> Livetest entfernt (nach `archives/harmony-kopien-livetest-20261011/` verschoben);
+> `0_TFP_Harmony/0Harmony.dll` des Spiels bleibt unangetastet. **Wichtig:** `sync.sh` schließt
+> `0Harmony.dll`/`Harmony*`/`MonoMod*`/`Mono.Cecil*` jetzt mit aus, sonst kopiert jeder Sync die
+> Build-Referenz aus dem Entwicklerordner zurück ins Livetest-Verzeichnis. `pack_release`-Wächter
+> und Regressionstest `test_no_diagnostic_code_in_release` verhindern Rückfälle.
+
+### Befund 11.10.2026, 10:42 — Log-Beleg für die Duplikat-Schleife (Diagnose-Build)
+
+Testfall Hewal: Lagerfeuer-Ausgabefach mit 1x Wasser + 1x Chrysantheme, Rezept „Roter Tee";
+danach 10x Stein + 10x Lehm.
+
+```
+CRAFT-Klick: recipeType=66052 anzahl=1 zutaten=[#0:66183x1, #1:66047x1] eingabeFach=False stationsFenster=True
+  stationAusgabe TE=[Wasser,Chrysantheme,Lehm,Stein] UI=[identisch]
+PlayerInventory.RemoveItems: [...]
+[Verbrauch] type=66183 benoetigt=1 Quellen=1 Sorten=[Workstation]
+[Verbrauch]   Quelle Workstation lieferte 1 (Ausgabefach danach=[Wasser, Lehm, Stein])
+[Resync] kein offenes Ausgabefach-Fenster (CurrentWorkstationOutputGrid == null)     <-- Fix B greift nicht
+  NACH Craft: stationAusgabe TE=[Lehm,Stein] UI=[Wasser,Chrysantheme,Lehm,Stein]      <-- UI hängt nach
+syncTEfromUI (UI -> TE): UI-Ausgabe=[Wasser,Chrysantheme,Lehm,Stein] TE-Ausgabe=[Lehm,Stein]   <-- Altstand zurück
+```
+
+Damit ist belegt: **Der Verbrauch funktioniert** (TE-Ausgabefach sinkt korrekt), und **die
+Duplikation entsteht ausschließlich bei geöffnetem Stationsfenster**, weil Vanilla die
+UI-Kopie per `syncTEfromUI()` ins TileEntity zurückschreibt. Ohne offenes Fenster (Test 2:
+10x Stein + 10x Lehm im Rucksack-Crafting-Menü) wurde korrekt verbraucht — Hewal bestätigt:
+„Lehm und Stein war aus dem Lagerfeuer verbraucht".
+
+Grund für das Versagen der ersten Fix-Varianten: **beide** UI-Zugriffe sind unbrauchbar —
+`XUi.CurrentWorkstationOutputGrid` ist auch bei offenem Lagerfeuer-/Werkbank-Fenster `null`,
+und `xui.GetChildrenByType<XUiC_CraftingWindowGroup>()` liefert kein Stationsfenster
+(Logzeile 169.315: `[Resync] kein offenes Stationsfenster gefunden`). Verlässlich auflösbar ist
+das Fenster nur **im Craft-Klick selbst** über `craftCountControl.WindowGroup.Controller`
+(Logzeile: `stationsFenster=True`).
+
+Fix (Patch 10b): `ItemActionEntryCraft.OnActivated` merkt sich im Prefix das Stationsfenster
+(`Patches.ActiveStationWindow`), der Resync läuft damit schon **während** des Verbrauchs
+(`StorageSource.SetModified()` → `RefreshOpenWorkstationOutputGrid`) und zusätzlich als
+Sicherheitsnetz im Postfix (`RefreshWorkstationOutputGrid` → `outputWindow.SetSlots(GetOutputStacks())`
++ `IsDirty` + `SetAllChildrenDirty`). Fällt der Klickpfad aus, greifen weiterhin die
+WindowGroup-Suche und das Property als Fallbacks.
+
+### Verifikation 11.10.2026, 10:56 — **FIX IM SPIEL BESTÄTIGT**
+
+```
+[Resync] Ausgabefach der offenen Station aktualisiert: UI vorher=[Wasser,Chrysantheme] -> nachher=[Wasser]  TE=[Wasser]
+[Resync] Ausgabefach der offenen Station aktualisiert: UI vorher=[Wasser] -> nachher=[leer]                 TE=[leer]
+  NACH Craft: stationAusgabe TE=[leer] UI=[leer]
+syncTEfromUI (UI -> TE): UI-Ausgabe=[leer] TE-Ausgabe=[leer]     <-- vorher stand hier der Altstand
+```
+
+- Hewal: „Ok, jetzt funktioniert es" — Lagerfeuer **und** Werkbank, Zutaten aus dem Ausgabefach
+  werden verbraucht, Abbruch dupliziert nichts mehr.
+- Diagnose-Code danach vollständig entfernt (Startmeldung wieder `v1.1.7`, keine `[DIAG]`-Strings
+  in der DLL), 16/16 Regressionstests grün (2 neue: `test_station_window_is_resolved_from_the_craft_click`,
+  `test_no_diagnostic_code_in_release`), Patch-Binde-Probe: 32 Patch-Klassen, 27 angewendet
+  (die 5 bekannten Umgebungsartefakte), neuer Patch `Patch_ItemActionEntryCraft_OnActivated`
+  angewendet.
+- DLL-Hash Dev = Livetest: `8a7dd58600374d4760d61273c4a153dd91127e9c0b6f7e0a4f491c3cb3454a24`.
+- Sicherung des Vorzustands: `archives/ProxiStack-vor-Output-Verbrauch-Fix-20261011-0949.tar.gz`.
+
+## Release-ZIP 1.1.7 – 11.10.2026
+
+Öffentliches Release-Archiv erstellt: `releases/ProxiStack-Proximity-Crafting-and-Stashing-1.1.7.zip`
+
+- **7 Laufzeitdateien** (statt 8 — die Harmony-DLL ist raus): `ProxiStack/ModInfo.xml`,
+  `ProxiStack/ProxiStack.dll`, `ProxiStack/ProxiStackConfig.xml`, `ProxiStack/Config/Localization.csv`,
+  `ProxiStack/Config/XUi_InGame/windows.xml`, `ProxiStack/UIAtlases/UIAtlas/ui_game_symbol_restock.png`,
+  `…/ui_game_symbol_stash.png`.
+- Größe 86.972 Bytes (ungepackt), `validate_release_zip.py` → **PASS**, genau ein Wurzelordner
+  `ProxiStack/`, Version `1.1.7` == Startmeldung, keine Quell-/Arbeitsdateien, kein Harmony.
+- SHA-256: `7cec744516170e4a64a36745d0b6aea40f27c29cc38077f10f96a99d62a6481f`.
+- `dist/ProxiStack/` wurde dafür aus dem aktuellen Dev-Stand aufgefrischt; DLL-Hash in
+  `dist/` == Dev == Livetest: `8a7dd58600374d4760d61273c4a153dd91127e9c0b6f7e0a4f491c3cb3454a24`.
+- Inhalt der ZIP: Fix A/B aus v1.1.7 (Verbrauch aus dem Ausgabefach offener Arbeitsstationen,
+  Verbrauch im Stationsfenster) + Harmony-freies Paket.
+- **Offen:** Upload auf Nexus/GitHub; die Nexus-Beschreibung muss dort noch auf den neuen Stand
+  („keine Harmony im Paket") gebracht werden — die Textdateien im Repo sind bereits korrigiert.
+
+## GitHub-Veröffentlichung 1.1.7 – 11.10.2026
+
+- **Repo:** `https://github.com/hewal-dev/ProxiStack` (public, MIT), Branch `main`.
+  Account per `gh api user` gegengeprüft: `hewal-dev` (nicht `gh auth status` glauben).
+- Quellcode und Doku für 1.1.7 gepusht; GitHub-Release **`v1.1.7`** mit dem ZIP als Asset
+  (`ProxiStack-Proximity-Crafting-and-Stashing-1.1.7.zip`, 7 Laufzeitdateien,
+  SHA-256 `7cec744516170e4a64a36745d0b6aea40f27c29cc38077f10f96a99d62a6481f`).
+- Vor dem Commit geprüft: `git diff --cached --name-only` enthält **nur** Quellcode/Doku —
+  keine `*.dll`, `*.zip`, `dist/`, `releases/`, `media/` (per `.gitignore` ausgeschlossen).
+- **Hinweis Compare:** Für `Compare` existiert **kein** GitHub-Repo (`hewal-dev/Compare` → 404)
+  und der Projektordner ist kein Git-Repository. Ein Upload der 1.0.5 dorthin würde ein neues
+  öffentliches Repo bedeuten — dafür ist eine ausdrückliche Freigabe nötig.
+
+## Verbindliche Pfade (Stand 11.10.2026)
+
+- Livetest-Ziel **aller** v3-Mods: `/home/hewal/7 Days/0 einzelne mods/<ModName>/`.
+  Das Steam-Verzeichnis `<Game>/Mods` ist ein Symlink dorthin.
+- `2 Vanilla 30/` in älteren Abschnitten dieses Logs ist historisch und wird
+  nicht mehr verwendet (Einträge werden nicht rückdatiert umgeschrieben).
+- `sync.sh` dieser Mod zielt ab 1.1.7 auf `0 einzelne mods/ProxiStack/`.
+
+## Stand: 11.10.2026 — Version 1.1.7: Ausgabefach-Verbrauch an Arbeitsstationen
+
+### Anlass (Hewal, Livetest v3.3)
+> „Wenn zum Craften Items aus dem Ausgabefach genommen werden, werden diese im
+> Ausgabefach der Arbeitsstationen nicht verbraucht.“
+
+### Ursache (belegt an der installierten Assembly, nicht vermutet)
+
+Belege per `ikdasm` gegen `Assembly-CSharp.dll` V 3.3.0. Zwei unabhängige Pfade:
+
+**(1) Vanilla schreibt die UI-Kopie der Arbeitsstation ins TileEntity zurück.**
+- `XUiC_WorkstationWindowGroup.syncTEfromUI()` (IL) überträgt die UI-Slots aller
+  Grids in den TE: `SetOutputStacks(outputWindow.GetSlots())` (+ Input, Tools, Fuel).
+- Aufgerufen wird das in `Update()` **genau beim Wechsel des Craft-Zustands**
+  (`wasCrafting != craftingQueue.IsCrafting()`) und in `OnClose()`.
+- ProxiStack verringert beim Craften `workstation.output` direkt am TE
+  (`ContainerHelper.RemoveNearbyItems`). Die UI-Slots bleiben unverändert, weil
+  Vanillas `XUiC_WorkstationWindowGroup.TileEntity_OutputChanged()` (genau
+  `outputWindow.SetSlots(GetOutputStacks())`) in dieser Version **nirgends
+  verdrahtet** ist (`grep` auf `ldftn TileEntity_OutputChanged` = 0 Treffer).
+- Folge: Beim Start des Craft-Vorgangs überschreibt Vanilla das korrekt verringerte
+  Ausgabefach mit dem alten UI-Stand → Items gelten als „nicht verbraucht“
+  (und sind beliebig oft kostenlos nutzbar).
+
+**(2) Im Arbeitsstation-Fenster wird gar nicht aus ProxiStack-Quellen verbraucht.**
+- `ItemActionEntryCraft.OnActivated` (IL): `if (GetChildByType<XUiC_WorkstationInputGrid>()
+  != null) workstationInputGrid.RemoveItems(ingredients, count, removed) else
+  xui.PlayerInventory.RemoveItems(...)`.
+- `XUiC_WorkstationInputGrid.RemoveItems/DecItem/GetItemCount/HasItems` arbeiten
+  ausschließlich auf dem Eingabe-/Materialfach (`GetSlots()`, `XUiM_Workstation.
+  SetInputStacks`); ein Fehlbetrag wird **stillschweigend ignoriert**. Dieser Pfad
+  war von ProxiStack nicht gepatcht.
+- Betroffen ist u. a. die Schmiede: `XUiC_WorkstationMaterialInputGrid :
+  XUiC_WorkstationInputGrid` (im Fenster `workstation_forge`), wird also von
+  `GetChildByType<XUiC_WorkstationInputGrid>()` mitgefunden.
+
+### Korrektur (kleinste Änderung, weiterhin rein clientseitig)
+
+| Ort | Änderung |
+|---|---|
+| `Patches.cs` | Neuer **Patch 6b**: Harmony-Postfix auf `XUiC_WorkstationInputGrid.DecItem(ItemValue,int,IList<ItemStack>)`. Ein Fehlbetrag (`_count - __result`) wird wie beim `Bag.DecItem`-Postfix aus ProxiStack-Quellen nachgezogen (`ContainerHelper.RemoveNearbyItems`, gleiche Quellen- und Prioritätsregel wie die Zählung). Deckt auch `XUiC_WorkstationMaterialInputGrid` (Schmiede) ab, da geerbt. |
+| `ContainerHelper.cs` | Neuer Helfer `RefreshOpenWorkstationOutputGrid(TileEntityWorkstation)`: zieht die offene Ansicht auf den TE-Stand nach (`CurrentWorkstationOutputGrid` → `SetSlots(GetOutputStacks())` + `IsDirty = true`). Wird aus `StorageSource.SetModified()` aufgerufen, wenn die geänderte Quelle ein `TileEntityWorkstation` ist — also genau nach einem Verbrauch aus dem Ausgabefach. |
+
+Bewusst nicht geändert: die Scan-Regel (weiterhin **nur** `workstation.output`,
+nie `input`), `StoragePriority`, Stash/Restock (scannen Arbeitsstationen nicht).
+
+### Verifikation
+- Regressionstests `python3 -m unittest -v tests/test_regressions.py`: **14/14 grün**
+  (2 neue: `test_workstation_window_craft_consumption_is_patched`,
+  `test_open_workstation_output_grid_is_resynced_after_removal`; Versionstest 1.1.7).
+- `bash build.sh`: **BUILD SUCCESSFUL**, keine Warnungen.
+- **Harmony-Binde-Probe** (Mono, gegen die installierte Assembly-CSharp geladen):
+  `Patch_WorkstationInputGrid_DecItem -> XUiC_WorkstationInputGrid.DecItem (postfix=1)`
+  → Zielmethode existiert mit exakter Signatur und der Postfix wird angewendet.
+- Memberref-Abgleich der neuen DLL (`monodis --memberref`): aufgelöst werden
+  `LocalPlayerUI.get_primaryUI`, `XUi.get_CurrentWorkstationOutputGrid`,
+  `XUiC_WorkstationGrid.get_WorkstationData` / `.SetSlots`,
+  `XUiM_Workstation.GetOutputStacks` / `.get_TileEntity` — alle gegen Assembly-CSharp.
+- `monodis --userstrings`: `[ProxiStack] Initializing ProxiStack v1.1.7` (== ModInfo.xml).
+- Sicherung vor der Änderung: `archives/ProxiStack-vor-Output-Verbrauch-Fix-20261011-0949.tar.gz`.
+
+### Erwartetes Ergebnis im Livetest
+- Fertige Ware aus dem Ausgabefach kann weiterhin als Zutat dienen — sie wird jetzt
+  aber tatsächlich verbraucht (Ausgabefach leert sich sichtbar, ohne Fenster-Neustart).
+- Craften im Schmiede-/Arbeitsstation-Fenster zieht fehlende Zutaten aus Kisten,
+  Fahrzeugen, Drohnen und Ausgabefächern nach, statt kostenlos zu sein.
+- Verhalten im Rucksack-Crafting-Fenster und bei Stash/Restock unverändert.
+
+### Offen
+- [ ] **Livetest durch Hewal:** Ausgabefach einer Station befüllen (z. B. Barren in
+  der Schmiede), dann etwas herstellen, das diese Ware braucht → Ausgabefach muss sich
+  verringern und verringert bleiben (auch nach Schließen/Öffnen des Fensters).
+- [ ] Livetest: Craften im Schmiede-Fenster mit fehlender Zutat in Kisten → Kisteninhalt
+  muss sinken (kein kostenloses Craften).
+- [ ] Multiplayer-Pfad des neuen DecItem-Postfixes ist ungetestet (wie bisher alle
+  Verbrauchspfade nur im Singleplayer verifiziert).
+
+---
+
+## Stand: 11.10.2026 — Nexus-Bugreport: mitgelieferte `0Harmony.dll` gehört nicht ins Paket
+
+### Anlass (Nexus-Bugreport zu 1.1.6)
+> „Es schmeißt beim Starten halt sofort das Logfenster auf und es gibt einige Errors …
+> es ist nur in der gepackten File schon eine Harmony.dll in dem Ordner. Hab die gelöscht
+> und keine Errors mehr."
+
+### Ursache (belegt per `ikdasm` gegen Assembly-CSharp V 3.3.0)
+- **Das Spiel bringt Harmony selbst mit:** `<Mods>/0_TFP_Harmony/` enthält
+  `0Harmony.dll` (**Harmony 2.13.0.0**), `TfpHarmony.dll` sowie MonoMod/Cecil-Assemblies.
+- `ModManager.LoadMods()` sucht den Mod mit dem Namen `TFP_Harmony`
+  (`'<LoadMods>b__6_0'`: `_mod.Name == "TFP_Harmony"`) und verschiebt ihn per
+  `FindIndex` → `RemoveAt` → `Insert(0, …)` **an den Anfang**, bevor `InitModCode()`
+  für alle Mods läuft. Die Spiel-Harmony ist also garantiert zuerst geladen.
+- `ModManager.loadModsFromFolder()` ruft je Unterordner `Mod.LoadDefinitionFromFolder()`
+  + `Mod.LoadMod()` und lädt dabei **jede** `*.dll` (Literal `".dll"`).
+- Unser ZIP enthielt `ProxiStack/0Harmony.dll` (Harmony **2.4.2.0**, 2,4 MB) → zweite
+  Assembly mit gleichem Simple Name, anderer Version. Im **eigenen** Linux-Log bindet Mono
+  die Kopie still auf die Spiel-Harmony (im ProxiStack-Ordner wird
+  `Loaded assembly 0Harmony (in …/0_TFP_Harmony/0Harmony.dll)` gemeldet, kein einziger
+  `ERR` außer der bekannten Discord-RTC-Zeile); auf anderen Setups (Windows) gibt es die
+  gemeldeten Startfehler. Deshalb haben andere Mods (ohne Harmony im Paket) das Problem nicht.
+
+### Korrektur
+- `dist/ProxiStack/0Harmony.dll` entfernt → Release-ZIP künftig **7** Runtime-Dateien,
+  ~34 KiB statt 846 KiB.
+- `README.md` (Installation, Build-Voraussetzungen, Third-Party) und
+  `NEXUS_DESCRIPTION_DE.md` / `NEXUS_DESCRIPTION_EN.md` korrigiert: keine Harmony im Paket,
+  Hinweis an Bestandsnutzer, `Mods/ProxiStack/0Harmony.dll` zu löschen.
+- `evz-nexus-mod-publishing/scripts/package_release.py`: neuer Wächter — DLLs mit Präfix
+  `0Harmony`/`Harmony`/`HarmonyX`/`MonoMod`/`Mono.Cecil` im Runtime-Baum brechen die
+  Paketierung mit klarer Meldung ab.
+
+### Verifikation
+- Wächter negativ/positiv getestet: mit `0Harmony.dll` → Abbruch mit Meldung; ohne →
+  `Runtime files: 7`, ZIP 34,3 KiB (Testlauf in Scratch, **kein** Release erzeugt).
+- Compile gegen die **Spiel-Harmony 2.13** in einer Scratch-Kopie: `EXIT=0`;
+  `monodis --assemblyref` der Test-DLL → `Version=2.13.0.0` (statt 2.4.2.0 bei der bisherigen
+  Dev-Referenz). Beide Varianten laufen zur Laufzeit, weil Unity/Mono über den Simple Name bindet.
+
+### Offen
+- [ ] **1.1.7-ZIP bauen** (enthält Fix A/B + 7 statt 8 Dateien). Optional vorher gegen
+  `0_TFP_Harmony/0Harmony.dll` neu kompilieren — Achtung: ändert den DLL-Hash, danach
+  erneut syncen und Hashvergleich.
+- [ ] Nach Hewals Livetest die Kopie auch aus `/home/hewal/7 Days/0 einzelne mods/ProxiStack/`
+  entfernen, damit das Testverzeichnis dem ausgelieferten Paket entspricht (laut Log ohnehin
+  wirkungslos, weil auf die Spiel-Harmony gebunden wird).
+- [ ] Prüfen, ob weitere EVZ-Mods (z. B. `Compare`, `WMM12SlotToolbelt`) eine Harmony-Kopie im
+  Ordner oder im Paket haben.
+
+---
+
 ## Stand: 08.10.2026 — Quellcode auf GitHub veröffentlicht
 
 ### Anlass
