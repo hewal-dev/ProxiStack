@@ -32,6 +32,24 @@ namespace ProxiStack
             }
         }
 
+        /// <summary>
+        /// Sucht einen Button ausgehend vom Backpack-Fenster (rekursiv) und nur als
+        /// Fallback unter <see cref="ContainerControls"/>. Nötig, weil
+        /// <c>XUiController.GetChildById</c> ausschließlich den eigenen Teilbaum
+        /// durchsucht: seit 1.1.9 hängen btnMoveStash/btnMoveRestock in
+        /// <c>rect[@name='header']</c> und damit außerhalb von ContainerStandardControls.
+        /// </summary>
+        public static XUiController FindButton(string id)
+        {
+            var root = (XUiController)BackpackWindow;
+            if (root != null)
+            {
+                var found = root.GetChildById(id);
+                if (found != null) return found;
+            }
+            return ContainerControls?.GetChildById(id);
+        }
+
         public static bool HasMoveDestinationOpen(XUiC_BackpackWindow backpackWindow = null)
         {
             try

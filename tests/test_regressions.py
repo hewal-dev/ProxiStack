@@ -50,14 +50,58 @@ class RestockRegressionTests(unittest.TestCase):
 
 
 class BackpackButtonLayoutTests(unittest.TestCase):
-    def test_buttons_use_vanilla_context_slots_not_currency_area(self):
+    def _vanilla_append(self):
+        """Der Patch für das Vanilla-Backpack-Fenster (nicht der optionale AGF-Zweig)."""
         root = ET.parse(WINDOWS).getroot()
-        for append in root.findall("append"):
-            buttons = {button.attrib["name"]: button for button in append.iter("button")}
-            if not buttons:
-                continue
-            self.assertEqual("100, -22", buttons["btnMoveRestock"].attrib["pos"])
-            self.assertEqual("150, -22", buttons["btnMoveStash"].attrib["pos"])
+        appends = [append for append in root.findall("append")
+                   if "window[@name='windowBackpack']" in append.attrib.get("xpath", "")]
+        self.assertEqual(1, len(appends), "genau ein Patch für windowBackpack erwartet")
+        return appends[0]
+
+    def test_vanilla_patch_targets_header_free_space(self):
+        """Ab v1.1.9 sitzen die Buttons im Freiraum der Kopfzeile (v3.4).
+
+        Die actions-Leiste ist ab v3.4 voll belegt (Filter/Suchfeld + rechts-
+        bündiger Block mit Lock/Sort/Fill/All). Der Patch darf deshalb NICHT in
+        die actions-Leiste hängen, sondern in rect[@name='header'].
+        """
+        xpath = self._vanilla_append().attrib["xpath"]
+        self.assertEqual("/windows/window[@name='windowBackpack']/rect[@name='header']", xpath)
+
+    def test_button_lookup_is_window_wide_not_container_scoped(self):
+        """Kopfzeilen-Buttons sind keine Kinder von ContainerStandardControls.
+
+        `XUiController.GetChildById` durchsucht nur den eigenen Teilbaum; ein
+        Lookup ausschließlich ab ContainerControls würde sichtbare, aber tote
+        Buttons erzeugen (kein OnPress angeschlossen).
+        """
+        manager = MANAGER.read_text(encoding="utf-8")
+        self.assertIn("public static XUiController FindButton(string id)", manager)
+        body = method_body(manager, "public static XUiController FindButton(string id)")
+        self.assertIn("root.GetChildById(id)", body)
+
+        patches = PATCHES.read_text(encoding="utf-8")
+        self.assertIn('ProxiStackManager.FindButton("btnMoveStash")', patches)
+        self.assertIn('ProxiStackManager.FindButton("btnMoveRestock")', patches)
+        self.assertNotIn('ContainerControls?.GetChildById("btnMoveStash")', patches)
+
+    def test_buttons_use_vanilla_context_slots_not_currency_area(self):
+        """X-Positionen müssen zwischen Kreativ-Trash und Geldbetrag liegen.
+
+        header-Geometrie in v3.4: Titel endet ~222, btnClearInventory 364-396
+        (nur Kreativmodus), currency-Label ab 492, Münze ab 565.
+        """
+        append = self._vanilla_append()
+        buttons = {button.attrib["name"]: button for button in append.iter("button")}
+        restock = buttons["btnMoveRestock"].attrib["pos"]
+        stash = buttons["btnMoveStash"].attrib["pos"]
+        self.assertEqual("420, -22", restock)
+        self.assertEqual("460, -22", stash)
+
+        for pos in (restock, stash):
+            x = int(pos.split(",")[0])
+            self.assertGreater(x - 16, 396, "darf den Kreativ-Trash-Button nicht überlagern")
+            self.assertLess(x + 16, 492, "darf den Geldbetrag nicht überlagern")
 
     def test_visibility_remains_complementary_to_vanilla_loot_buttons(self):
         root = ET.parse(WINDOWS).getroot()
@@ -177,13 +221,13 @@ class WorkstationConsumptionTests(unittest.TestCase):
 
 
 class VersionTests(unittest.TestCase):
-    def test_bugfix_release_is_1_1_7(self):
+    def test_bugfix_release_is_1_1_9(self):
         root = ET.parse(MODINFO).getroot()
         version_element = root.find("Version")
         if version_element is None:
             self.fail("ModInfo.xml has no Version element")
         version = version_element.attrib["value"]
-        self.assertEqual("1.1.7", version)
+        self.assertEqual("1.1.9", version)
 
     def test_startup_banner_matches_modinfo_version(self):
         """Startmeldung und ModInfo.xml dürfen nicht auseinanderlaufen."""

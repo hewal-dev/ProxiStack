@@ -37,11 +37,15 @@ namespace ProxiStack
                 {
                     ProxiStackManager.InitializeUI(__instance);
 
-                    var qsBtn = ProxiStackManager.ContainerControls?.GetChildById("btnMoveStash");
+                    // Buttons sitzen in rect[@name='header'] (Freiraum rechts neben dem
+                    // Kreativ-Trash), nicht mehr unter ContainerStandardControls.
+                    // ContainerControls.GetChildById sucht nur im EIGENEN Teilbaum und
+                    // würde sie dort nicht finden - Lookup deshalb fensterweit.
+                    var qsBtn = ProxiStackManager.FindButton("btnMoveStash");
                     if (qsBtn != null)
                         qsBtn.OnPress += (XUiController sender, int mouseBtn) => ProxiStackManager.DoStash();
 
-                    var qrBtn = ProxiStackManager.ContainerControls?.GetChildById("btnMoveRestock");
+                    var qrBtn = ProxiStackManager.FindButton("btnMoveRestock");
                     if (qrBtn != null)
                         qrBtn.OnPress += (XUiController sender, int mouseBtn) => ProxiStackManager.DoRestock();
 

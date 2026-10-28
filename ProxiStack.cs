@@ -18,7 +18,7 @@ namespace ProxiStack
             _instance = this;
             ModPath = _modInstance.Path;
 
-            Log.Out("[ProxiStack] Initializing ProxiStack v1.1.7");
+            Log.Out("[ProxiStack] Initializing ProxiStack v1.1.9");
 
             Config = new ProxiStackConfig();
             Config.Load(System.IO.Path.Combine(ModPath, "ProxiStackConfig.xml"));

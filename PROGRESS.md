@@ -978,3 +978,93 @@ In 7DTD v3.0, item checks and consumption are handled through:
   - Nutzt die existierende Konfigurationsoption `EnableForQuests` (Standard: `true`).
 - **v3.0 Besonderheit**: Anders als in v2.6 hat `ChallengeObjectiveGather` in v3.0 kein eigenes `HandleUpdatingCurrent`. Die Methode wird von `BaseChallengeObjective` geerbt. Unser Postfix-Patch greift auf der Basisklasse und prüft per `as ChallengeBaseTrackedItemObjective`, ob es sich um ein item-basiertes Objective handelt.
 - **Kompilierung & Deployment**: DLL erfolgreich gebaut und via `sync.sh` ins Livetest-Verzeichnis übertragen.
+
+---
+
+## Stand: 28.10.2026 — v1.1.8: XUi-Fix für 7DTD v3.4 (Stash-/Restock-Buttons fehlten)
+
+**Symptom (Nutzer):** Nach dem Update auf 7 Days to Die **V 3.4.0 (b6)** waren die beiden Buttons im Inventar (Restock/Einlagern) verschwunden.
+
+**Befund (belegt, neuestes Client-Log 28.10. 13:33):**
+```
+WRN XML patch for "XUi_InGame/windows.xml" from mod "ProxiStack" did not apply:
+  <append xpath="/windows/window[@name='windowBackpack']/rect[@name='header']/rect[@controller='ContainerStandardControls']"
+```
+- **Ursache:** Vanilla hat `ContainerStandardControls` in `windowBackpack` verschoben. Bis v3.3 lag der Controller in `rect[@name='header']`; ab v3.4 steht er als eigenes `rect[@name='actions']` (pos 0,-46, height 40) unterhalb der Kopfzeile. Der XPath zielte ins Leere → kein einziger Button im Fenster → auch die `OnPress`-Verdrahtung in `Patches.cs` (Patch 1, `GetChildById`) findet nichts.
+- **Regression belegt, nicht angenommen:** `did not apply`-Zeilen pro Log: v3.3 = 1 (nur der optionale AGF-Zweig), v3.4 = 2 (AGF **und** Standard-Backpack). Neue Signatur tritt ausschließlich unter 3.4.0 (b6) auf.
+- **Kein C#-Bruch:** Mono.Cecil-Member-Audit der 1.1.7-DLL gegen die 3.4-Assemblies → 0 fehlende Symbole. Es war reines XML.
+
+**Neue Anker-Struktur (aus `Data/Config/XUi_InGame/windows.xml`, v3.4.0 b6):**
+```
+window[@name='windowBackpack']
+  rect[@name='header']                       height 43 – Icon, Name, Geldbetrag, Trash
+  rect[@name='actions']  controller=ContainerStandardControls  pos 0,-46 height 40
+    rect[@name='filters']                    Kategorie-/Textfilter
+    rect[@move_start_bottom_left='true']     rechtsbündig, pos ${parentinnerwidth-162}, width 160
+      iconbutton btnToggleLockMode   pos 20,-20
+      button     btnSort             pos 60,-20
+      rect pos="0, 0"
+        button   btnMoveFillAndSmart pos 100,-20   (nur beim Looten aktiv)
+        button   btnMoveAll          pos 140,-20   (nur beim Looten aktiv)
+```
+
+**Fix (v1.1.8):** `Config/XUi_InGame/windows.xml` hängt die beiden Buttons jetzt in den rechtsbündigen Block der `actions`-Leiste:
+`/windows/window[@name='windowBackpack']/rect[@name='actions']/rect[@move_start_bottom_left='true']`
+mit `pos="100, -20"` (Restock) und `pos="140, -20"` (Stash) – also **genau auf den Vanilla-Transferbutton-Slots**, mit der bestehenden komplementären Sichtbarkeit `{notlootingorvehiclestorage}`. Beim Looten/Fahrzeugzugriff verschwinden unsere Buttons, Vanillas Fill/All werden aktiv; ohne geöffneten Behälter liegen unsere Buttons über den (ausgegrauten) Vanilla-Slots.
+- Der AGF-Zweig (`windowBackpackAGF`) bleibt unverändert: Er scheitert ohne installiertes AGF-BackpackPlus erwartbar und harmlos (in v3.3 genauso).
+- Version gemeinsam in `ModInfo.xml` und Startmeldung (`ProxiStack.cs`) auf 1.1.8 gehoben, DLL neu gebaut.
+
+**Verifikation (tatsächlich ausgeführt):**
+- XPath-Ziel gegen die installierte Vanilla-Datei mit einem .NET-`XPathNavigator`-Simulator geprüft: **genau 1 Treffer**, Zielknoten `rect pos=${parentinnerwidth-162},0 width=160`; Kinder vorher = Lock(20)/Sort(60)/rect(0,0), eingefügte Buttons 100/140. Der AGF-Zweig hat 0 Treffer (erwartet).
+- Semantik der Auffindung im Spiel-IL geprüft: `XUiController.GetChildByType<T>()` und `GetChildById()` sind **rekursiv** → `ProxiStackManager.ContainerControls` findet den Controller weiterhin (jetzt direktes Kind des Fensters), `GetChildById("btnMoveStash"/"btnMoveRestock")` findet die Buttons eine Ebene tiefer.
+- `bash build.sh` grün; `pytest tests/test_regressions.py` → **17 passed** (zwei Tests an die neue Struktur angepasst, ein neuer Regressionswächter `test_vanilla_patch_targets_v34_actions_control_block`).
+- Member-Audit der neu gebauten DLL gegen 3.4 → 0 fehlende Symbole.
+- `sync.sh` nach `/home/hewal/7 Days/0 einzelne mods/ProxiStack/`: DLL-Hash identisch (`78b5c819…`), `windows.xml` identisch, `ModInfo` = 1.1.8.
+- `sync.sh` um `--exclude ".pytest_cache/"` ergänzt (Dry-Run wollte den Pytest-Cache in den Lade-Ordner kopieren).
+
+**Offen / noch nicht bestätigt:**
+- **Optik im Spiel nicht geprüft** (kein Client-Start aus der Sitzung heraus). Beim nächsten Start prüfen: Buttons sitzen rechts neben dem Sortier-Icon; beim Öffnen einer Kiste/eines Fahrzeugspinds verschwinden sie und Vanillas Fill/All sind bedienbar; Tooltips `lblStashRestock`/`lblStashStack` erscheinen; Geldbetrag/Münze in der Kopfzeile bleiben frei.
+- Falls die actions-Leiste in einem späteren Build erneut umgebaut wird, fällt der Patch wieder sichtbar mit `did not apply` aus (kein stiller Fehlschlag).
+
+---
+
+## Stand: 28.10.2026 — v1.1.9: Buttons in die Kopfzeile (keine Überlagerung der Vanilla-Buttons)
+
+**Anlass (Nutzer-Rückmeldung nach v1.1.8):** Die Buttons lagen exakt auf den Vanilla-Transferbuttons (`btnMoveFillAndSmart` 100, `btnMoveAll` 140) – sichtbar, aber unschön.
+
+**Platzanalyse (v3.4.0 b6, `windowBackpack`, 603 breit):** Die `actions`-Leiste ist vollständig belegt – Filter-Icon 5–35, Such-Icon 45–75, Kategorie-Grid 100–440, Textsuchfeld 80–330, rechtsbündiger Block 441–601 (Lock 461 / Sort 501 / Fill 541 / All 581). In der Leiste ist kein Platz für zwei weitere Icons, ohne Vanilla-Elemente zu verschieben.
+
+**Kopfzeile (`rect[@name='header']`, height 43) hat dagegen Freiraum:** Icon 21, Titel 42–222, `btnClearInventory` 364–396 (nur Kreativmodus), Geldbetrag-Label 492–572, Münze 565–589. Frei: 400–476.
+
+**Umsetzung (v1.1.9):** Buttons jetzt in `rect[@name='header']` auf `pos="420, -22"` (Restock) und `pos="460, -22"` (Stash) – 24 px Abstand zum Trash-Button und 16 px zum Geldbetrag. Sichtbarkeit bleibt komplementär (`{notlootingorvehiclestorage}`).
+
+**Dabei behobene Falle (sonst tote Buttons):** `XUiController.GetChildById` durchsucht nur den **eigenen Teilbaum**. Die Verdrahtung in `Patches.cs` holte die Buttons über `ProxiStackManager.ContainerControls` (= `rect[@name='actions']`); in der Kopfzeile wäre sie `null` geblieben → Buttons sichtbar, aber ohne `OnPress`. Neu: `ProxiStackManager.FindButton(string id)` sucht rekursiv ab dem Backpack-Fenster und nutzt `ContainerControls` nur noch als Fallback. `ContainerControls`/`GetChildByType` bleiben für `HasMoveDestinationOpen` unverändert nötig.
+
+**Verifikation (ausgeführt):**
+- XPath-Simulator gegen die installierte Vanilla-Config: Ziel `windowBackpack/rect[@name='header']` = **1 Treffer**; Kinder bestätigt (Icon 21, Titel 42, Trash 380, Geldbetrag 492, Münze 577) → 420/460 kollidiert mit nichts.
+- `pytest tests/test_regressions.py` → **18 passed**; zwei neue Wächter: `test_vanilla_patch_targets_header_free_space` (XPath muss `header` sein) und `test_button_lookup_is_window_wide_not_container_scoped` (Verdrahtung darf nicht ausschließlich ab `ContainerControls` suchen); Positions-Test prüft jetzt die Kollisionsfreiheit gegen Trash (396) und Geldbetrag (492).
+- `build.sh` grün, Member-Audit der DLL gegen 3.4 → 0 fehlende Symbole, Startmeldung im Binary `Initializing ProxiStack v1.1.9`.
+- `sync.sh` → DLL-Hash identisch (`3eff1ff0…`), `windows.xml` und `ModInfo.xml` identisch im Live-Ordner.
+
+**Offen:**
+- Optik im Spiel weiterhin unbestätigt (kein Client-Start aus der Sitzung). Beim nächsten Start prüfen: die zwei Icons sitzen in der Kopfzeile zwischen Mülltonne und Geldbetrag, ohne Überlappung; Klick auf Restock/Stash wirkt (Verdrahtung), Tooltips erscheinen; beim Looten verschwinden sie.
+- Falls die Icons zu dicht am Geldbetrag wirken: `pos` auf 400/440 verschieben (eine Zeile, Testgrenzen 396/492 bleiben gültig).
+
+---
+
+## Stand: 28.10.2026 — v1.1.9 auf Nexus Mods veröffentlicht
+
+**Aktion:** Datei-Update auf der bestehenden Mod-Seite `nexusmods.com/7daystodie/mods/12082` (kein neuer Entwurf, kein Publish-Schritt nötig).
+
+- **Archiv:** `releases/ProxiStack-Proximity-Crafting-and-Stashing-1.1.9.zip` (35,8 KB, SHA-256 `f6ffd9892c103bcccb91290c29c7d9b0f75f4d84e28f8990578a5afabdaade49`), `validate_release_zip.py` = PASS (7 Runtime-Dateien, Wurzel `ProxiStack`, Version 1.1.9). DLL im ZIP = DLL im Live-Ordner (`3eff1ff0…`).
+- **Upload:** Datei-Zeile per „Update existing file“ ersetzt; **Display name** `ProxiStack for 7D2D 3.4`, **File version** `1.1.9`, „Update mod version to match this file's version“ gesetzt, „Archive existing file“ bewusst nicht. 1.1.7 bleibt unter Old files downloadbar.
+- **Changelog (öffentlich, Logs-Tab, anonym verifiziert):**
+  `Fixed the stash and restock buttons missing on 7 Days to Die 3.4 (new inventory layout).`
+  `Buttons moved to the inventory header so they no longer cover the vanilla buttons.`
+  (Erst mit vorangestellten `- ` eingetragen → Nexus rendert selbst Bullets, daher per „More actions → Edit changelog“ auf reinen Text umgestellt.)
+- **Verifikation anonym (Firecrawl, ohne Session):** Mod-Version 1.1.9, `Last updated 28 Oct 2026, 9:03AM`, Main-File „ProxiStack for 7D2D 3.4“ 35 KB, Changelog-Eintrag unter Version 1.1.9 vorhanden. Datei stand kurzzeitig auf „Virus scanning is in progress“ (normal).
+- **Upload-Session:** kopierte Nexus-Cookies waren abgelaufen (Token-Rotation) → Brave-Kopie des Profils sichtbar auf dem Desktop gestartet, Login durch Hewal, danach per CDP gesteuert. Profilkopie nach dem Upload gelöscht.
+
+**Offen:**
+- **GitHub-Pendant fehlt:** EVZ-Mods erscheinen normalerweise doppelt. Für v1.1.9 gibt es noch kein Commit/Release im Quell-Repo `hewal-dev/ProxiStack` (letztes Release 1.1.6). Auf Wunsch nachziehen, inkl. Quellen für den Kopfzeilen-Fix und `FindButton`.
+- Die Datei-Zeile trägt weiterhin die alte Kurzbeschreibung „Fix for Duplicate Bug, removed shipped harmony.dll“ (Feld ist nur über den Update-Formularweg erreichbar); bei der nächsten Version mitpflegen.

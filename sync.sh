@@ -23,6 +23,7 @@ rsync -av --delete --delete-excluded \
     --exclude "releases/" \
     --exclude "media/" \
     --exclude "tests/" \
+    --exclude ".pytest_cache/" \
     --exclude "__pycache__/" \
     "/home/hewal/Hermes/7d2d-v3-mods/ProxiStack/" "$LIVETEST"
 
