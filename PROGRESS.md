@@ -1075,3 +1075,15 @@ mit `pos="100, -20"` (Restock) und `pos="140, -20"` (Stash) – also **genau auf
 - **Release:** https://github.com/hewal-dev/ProxiStack/releases/tag/v1.1.9 (Latest), Asset `ProxiStack-Proximity-Crafting-and-Stashing-1.1.9.zip`, 36 696 Bytes = lokale Datei, State `uploaded`. Tag zeigt auf den Release-Commit `d3ea267`.
 - **Gleiches Archiv wie Nexus** (SHA-256 `f6ffd989…`), Version identisch 1.1.9 – beide Downloads sind byte-gleich.
 - **Portabler Build bewiesen:** `git archive HEAD` in ein leeres Verzeichnis entpackt, dort `build.sh` mit explizitem Spielverzeichnis → `BUILD SUCCESSFUL`, erzeugte DLL `3eff1ff0…` **identisch** zur ausgelieferten DLL. Der Repo-Baum enthält keine Binaries/ZIPs (Grep über den Remote-Tree: leer), Lizenz MIT.
+
+### Nachtrag 2: Zeile unter der Version („File description") — Versuch dokumentiert
+
+**Ziel (Nutzer-Konvention, gilt für alle Mods):** Die Zeile unter der Versionsnummer im Files-Tab nennt nur die unterstützte Spielversion, z. B. `for 7DTD V3.4`. Festgehalten in `../NexusMods-Beschreibungsstandard.md` und in der Skill `evz-nexus-mod-publishing`.
+
+**Befund: Das Feld lässt sich für eine bestehende Datei nicht überschreiben (verifiziert 28.10.2026).**
+- Es liegt im Update-Formular unter **File options** als `Description (n/255)`, Platzhalter „Provide additional information for this specific file if relevant". Alter Wert: „Fix for Duplicate Bug, removed shipped harmony.dll" (aus 1.1.7 geerbt).
+- Fünf Wege probiert: nativer Value-Setter + input/change, `execCommand('insertText')`, zeichenweise CDP-Tastatureingaben, das Zeilenmenü **Edit → File options**, und der komplette Ersatz-Upload („Update existing file"). In allen Fällen stand der neue Text unmittelbar vor `Save file` im Feld — nach dem Speichern zeigte sowohl das Formular als auch die öffentliche Seite wieder den alten Text. Bewertung: **serverseitig nicht beschreibbar**, nicht unser Fehler.
+- **Nebenwirkung aufgeräumt:** Jeder `Save file` auf einer bereits veröffentlichten Version erzeugt einen **zusätzlichen Datei-Datensatz** gleichen Namens (Status „Old", die Versionsnummer im Formular wurde dabei automatisch auf 1.1.10 hochgezählt und einmal so gespeichert). Diese vier Duplikate wurden über das Zeilenmenü **More actions → Archive** entfernt. Öffentlich sichtbar sind jetzt: Main 1.1.9 + Old 1.1.7 / 1.1.6 / 1.1.3.
+- Die Mod-Version steht wieder korrekt auf **1.1.9** (war zwischenzeitlich durch den fehlgeschlagenen 1.1.10-Save auf 1.1.10 gesprungen).
+
+**Offen:** Die alte Fix-Zeile bleibt bis auf Weiteres stehen. Beim nächsten echten Upload (neue Version) einmal gegenprüfen, ob Nexus das Feld bei einer *neuen* Datei übernimmt — falls ja, dort `for 7DTD <Version>` setzen. Falls nein: Feld als nicht pflegbar dokumentieren (Support-Ticket wäre der einzige Weg).
