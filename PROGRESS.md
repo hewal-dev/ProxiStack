@@ -1068,3 +1068,10 @@ mit `pos="100, -20"` (Restock) und `pos="140, -20"` (Stash) – also **genau auf
 **Offen:**
 - **GitHub-Pendant fehlt:** EVZ-Mods erscheinen normalerweise doppelt. Für v1.1.9 gibt es noch kein Commit/Release im Quell-Repo `hewal-dev/ProxiStack` (letztes Release 1.1.6). Auf Wunsch nachziehen, inkl. Quellen für den Kopfzeilen-Fix und `FindButton`.
 - Die Datei-Zeile trägt weiterhin die alte Kurzbeschreibung „Fix for Duplicate Bug, removed shipped harmony.dll“ (Feld ist nur über den Update-Formularweg erreichbar); bei der nächsten Version mitpflegen.
+
+### Nachtrag: Quell-Repo nachgezogen (GitHub)
+
+- **Commit:** `d3ea267` – „ProxiStack 1.1.9 – Inventar-Buttons für 7 Days to Die 3.4 repariert“ (windows.xml, Patches.cs, ProxiStackManager.cs, ProxiStack.cs, ModInfo.xml, tests, sync.sh, PROGRESS).
+- **Release:** https://github.com/hewal-dev/ProxiStack/releases/tag/v1.1.9 (Latest), Asset `ProxiStack-Proximity-Crafting-and-Stashing-1.1.9.zip`, 36 696 Bytes = lokale Datei, State `uploaded`. Tag zeigt auf den Release-Commit `d3ea267`.
+- **Gleiches Archiv wie Nexus** (SHA-256 `f6ffd989…`), Version identisch 1.1.9 – beide Downloads sind byte-gleich.
+- **Portabler Build bewiesen:** `git archive HEAD` in ein leeres Verzeichnis entpackt, dort `build.sh` mit explizitem Spielverzeichnis → `BUILD SUCCESSFUL`, erzeugte DLL `3eff1ff0…` **identisch** zur ausgelieferten DLL. Der Repo-Baum enthält keine Binaries/ZIPs (Grep über den Remote-Tree: leer), Lizenz MIT.
